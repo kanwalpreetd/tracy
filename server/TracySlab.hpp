@@ -2,6 +2,7 @@
 #define __TRACYSLAB_HPP__
 
 #include <assert.h>
+#include <cstddef>
 #include <stdint.h>
 #include <vector>
 
@@ -33,9 +34,21 @@ public:
         }
     }
 
+    static tracy_force_inline size_t AlignUp( size_t v, size_t a )
+    {
+        return ( v + a - 1 ) & ~( a - 1 );
+    }
+
     tracy_force_inline void* AllocRaw( size_t size )
     {
         assert( size <= BlockSize );
+        // Align allocations to alignof(std::max_align_t) so that any type
+        // placed here has correctly aligned members. Without this, a prior
+        // variable-length allocation (e.g. a char[N] for a string with odd N)
+        // leaves m_offset misaligned, and the next struct allocation ends up
+        // at an odd address — causing crashes in nested fields that require
+        // 8-byte alignment (std::vector, unordered_flat_map, int64_t, etc.).
+        m_offset = AlignUp( m_offset, alignof( std::max_align_t ) );
         const auto offset = m_offset;
         if( offset + size > BlockSize )
         {
@@ -92,6 +105,7 @@ public:
 
     tracy_force_inline void* AllocBig( size_t size )
     {
+        m_offset = AlignUp( m_offset, alignof( std::max_align_t ) );
         const auto offset = m_offset;
         if( offset + size <= BlockSize )
         {

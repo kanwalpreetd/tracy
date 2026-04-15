@@ -254,6 +254,13 @@ int main( int argc, char** argv )
     }
     const auto t1 = std::chrono::high_resolution_clock::now();
 
+    // Ensure all worker threads have finished processing queued data before
+    // we read m_data. Disconnect() only signals the threads to stop; it does
+    // not wait for them. Without this, worker.Write() races with the Exec
+    // thread that is still draining queued network buffers under m_data.lock,
+    // which crashes on larger captures.
+    worker.JoinThreads();
+
     const auto& failure = worker.GetFailureType();
     if( failure != tracy::Worker::Failure::None )
     {

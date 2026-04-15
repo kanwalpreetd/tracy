@@ -632,6 +632,7 @@ public:
     bool IsOnDemand() const { return m_onDemand; }
     void Shutdown() { m_shutdown.store( true, std::memory_order_relaxed ); }
     void Disconnect();
+    void JoinThreads();
     bool WasDisconnectIssued() const { return m_disconnect; }
 
     void Write( FileWrite& f, bool fiDict );

@@ -3559,7 +3559,16 @@ void Worker::InsertLockEvent( LockMap& lockmap, LockEvent* lev, uint64_t thread,
     auto it = lockmap.threadMap.find( thread );
     if( it == lockmap.threadMap.end() )
     {
-        assert( lockmap.threadList.size() < MaxLockThreads );
+        // Bounds check: lockmap.range[] is a fixed array of MaxLockThreads (64)
+        // elements, and LockEvent::thread is uint8_t. If we exceed 64 unique
+        // threads on a single lock, the later `lockmap.range[it->second]`
+        // access writes out-of-bounds and corrupts the next LockMap in the
+        // slab. Drop the event by marking the lock invalid so it won't be shown.
+        if( lockmap.threadList.size() >= MaxLockThreads )
+        {
+            lockmap.valid = false;
+            return;
+        }
         it = lockmap.threadMap.emplace( thread, lockmap.threadList.size() ).first;
         lockmap.threadList.emplace_back( thread );
     }
@@ -7577,6 +7586,13 @@ void Worker::Disconnect()
     //Query( ServerQueryDisconnect, 0 );
     Shutdown();
     m_disconnect = true;
+}
+
+void Worker::JoinThreads()
+{
+    if( m_threadNet.joinable() ) m_threadNet.join();
+    if( m_thread.joinable() ) m_thread.join();
+    if( m_threadBackground.joinable() ) m_threadBackground.join();
 }
 
 static void WriteHwSampleVec( FileWrite& f, SortedVector<Int48, Int48Sort>& vec )
